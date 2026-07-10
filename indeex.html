@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BlackJack - Laboratorio (Hi‑Lo + Splits)</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    :root{--bg:#0f1720;--card:#111827;--accent:#f59e0b;--muted:#94a3b8;--green:#10b981;--danger:#ef4444}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#071029 0%, #0b1220 100%);color:#e6eef8;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:12px}
+    .app{width:100%;max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.05));padding:14px;border-radius:12px;box-shadow:0 6px 30px rgba(2,6,23,0.7)}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+    h1{font-size:18px;margin:0}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    select,input,button{background:var(--card);color:inherit;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px}
+    button{cursor:pointer}
+    .row{display:flex;gap:12px;align-items:flex-start}
+    .panel{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;flex:1}
+    .hand{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .card{width:64px;height:90px;border-radius:8px;background:#fff;color:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700}
+    .card.small{width:48px;height:68px;font-size:12px}
+    .stats{display:flex;gap:8px;flex-wrap:wrap}
+    .stat{background:rgba(255,255,255,0.03);padding:8px;border-radius:8px}
+    .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .recommend{border:2px solid transparent;padding:6px;border-radius:6px;display:inline-block}
+    .recommend.reco{border-color:var(--accent);box-shadow:0 4px 18px rgba(245,158,11,0.12)}
+    .small{font-size:13px;color:var(--muted)}
+    .danger{color:var(--danger)}
+    .hand-panel{padding:8px;border-radius:8px;background:rgba(0,0,0,0.06);margin-bottom:8px}
+    .hand-active{outline:3px solid rgba(16,185,129,0.12)}
+    footer{margin-top:12px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Blackjack laboratorio">
+    <header>
+      <h1>BlackJack — Laboratorio (Hi‑Lo + Splits)</h1>
+    </header>
+
+    <div class="controls">
+      <label class="small">Barajas:
+        <select id="selectDecks">
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="6" selected>6</option>
+        </select>
+      </label>
+
+      <label class="small">Min apuesta:
+        <input id="minBet" type="number" value="10" min="1" style="width:80px">
+      </label>
+
+      <button id="btnNewShoe">Nueva mezcla</button>
+      <button id="btnResetBank">Reiniciar banca</button>
+
+      <div style="margin-left:auto" class="small">Banca: <strong id="bankDisplay">1000</strong> u</div>
+    </div>
+
+    <div class="row">
+      <div class="panel" style="flex:2">
+        <div style="display:flex;justify-content:space-between">
+          <div>
+            <div class="small">Contador (Hi‑Lo):</div>
+            <div class="stats">
+              <div class="stat">Running: <strong id="runningCount">0</strong></div>
+              <div class="stat">True: <strong id="trueCount">0</strong></div>
+              <div class="stat">Barajas restantes: <strong id="decksLeft">0</strong></div>
+            </div>
+          </div>
+
+          <div style="text-align:right">
+            <div class="small">Apuesta sugerida:</div>
+            <div><strong id="suggestedBet">10</strong> u</div>
+            <div class="small">Apuesta actual:</div>
+            <input id="betInput" type="number" value="10" min="1" style="width:100px">
+            <div class="small" style="margin-top:6px">Estado: <span id="status">Esperando mezcla</span></div>
+          </div>
+        </div>
+
+        <hr style="border:none;height:8px">
+
+        <div>
+          <h3 style="margin:4px 0">Dealer</h3>
+          <div id="dealerHand" class="hand" aria-live="polite"></div>
+          <div class="small">Valor: <span id="dealerValue">—</span></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <h3 style="margin:4px 0">Jugador</h3>
+          <div id="playerHandsContainer"></div>
+          <div class="small">Mano activa: <span id="activeHandIndex">—</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:8px">
+          <button id="btnDeal">Repartir</button>
+          <button id="btnHit" disabled>Pedir</button>
+          <button id="btnStand" disabled>Plantarse</button>
+          <button id="btnDouble" disabled>Doblar</button>
+          <button id="btnSplit" disabled>Dividir</button>
+        </div>
+
+        <div style="margin-top:8px">
+          <div class="small">Estrategia básica recomienda:</div>
+          <div class="small recommend" id="strategyRec">—</div>
+          <div class="small" style="margin-top:6px">Desviaciones recomendadas según True Count (TC):</div>
+          <ul class="small" id="deviationsList"></ul>
+        </div>
+
+      </div>
+
+      <div class="panel" style="flex:1">
+        <h3 style="margin:4px 0">Historial / Controles</h3>
+
+        <div class="small">Barajas totales: <span id="totalCards">—</span></div>
+        <div class="small">Cartas usadas: <span id="usedCards">—</span></div>
+
+        <hr style="border:none;height:6px">
+
+        <div>
+          <h4 style="margin:6px 0">Reglas</h4>
+          <ul class="small">
+            <li>Dealer planta en soft 17.</li>
+            <li>Conteo Hi‑Lo (2‑6:+1, 7‑9:0, 10/A:-1).</li>
+            <li>Permite 1 split (no resplits) — opción configurable.</li>
+            <li>Apuesta mínima configurable.</li>
+            <li>Guardar banca en el dispositivo (localStorage).</li>
+          </ul>
+        </div>
+
+        <hr style="border:none;height:6px">
+
+        <div>
+          <h4 style="margin:6px 0">Consejos</h4>
+          <p class="small">Esta app es educativa. Las desviaciones son aproximadas; úsala solo para practicar en entornos legales.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Demo — Código abierto local. Puedo guiarte para subirlo o empaquetarlo.
+    </footer>
+  </div>
+
+  <script>
+  (function(){
+    // DOM
+    const selectDecks = document.getElementById('selectDecks');
+    const btnNewShoe = document.getElementById('btnNewShoe');
+    const btnDeal = document.getElementById('btnDeal');
+    const btnHit = document.getElementById('btnHit');
+    const btnStand = document.getElementById('btnStand');
+    const btnDouble = document.getElementById('btnDouble');
+    const btnSplit = document.getElementById('btnSplit');
+    const btnResetBank = document.getElementById('btnResetBank');
+    const runningCountEl = document.getElementById('runningCount');
+    const trueCountEl = document.getElementById('trueCount');
+    const decksLeftEl = document.getElementById('decksLeft');
+    const suggestedBetEl = document.getElementById('suggestedBet');
+    const betInput = document.getElementById('betInput');
+    const minBetInput = document.getElementById('minBet');
+    const bankDisplay = document.getElementById('bankDisplay');
+    const playerHandsContainer = document.getElementById('playerHandsContainer');
+    const dealerHandEl = document.getElementById('dealerHand');
+    const statusEl = document.getElementById('status');
+    const deviationsList = document.getElementById('deviationsList');
+    const totalCardsEl = document.getElementById('totalCards');
+    const usedCardsEl = document.getElementById('usedCards');
+    const strategyRecEl = document.getElementById('strategyRec');
+    const activeHandIndexEl = document.getElementById('activeHandIndex');
+
+    // State
+    let shoe = [];
+    let shoeIndex = 0;
+    let numDecks = parseInt(selectDecks.value,10);
+    let runningCount = 0;
+    let bank = Number(localStorage.getItem('bj_bank') || 1000);
+    let playerHands = []; // array of arrays
+    let bets = []; // same index as playerHands
+    let initialBlackjack = []; // per hand
+    let activeHand = 0;
+    let dealerHand = [];
+    let roundActive = false;
+    let splitAllowed = true; // allow single split
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+    const suits = ['♠','♥','♦','♣'];
+
+    // Utilities
+    function hiLoValue(rank){
+      if(rank==='A' || rank==='K' || rank==='Q' || rank==='J' || rank==='10') return -1;
+      if(['2','3','4','5','6'].includes(rank)) return 1;
+      return 0;
+    }
+
+    function shuffleArray(arr){
+      for(let i=arr.length-1;i>0;i--){
+        const r = crypto.getRandomValues(new Uint32Array(1))[0] / (0xFFFFFFFF + 1);
+        const j = Math.floor(r*(i+1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function buildShoe(decks){
+      const cards = [];
+      for(let d=0; d<decks; d++){
+        for(const r of ranks) for(const s of suits) cards.push({rank:r,suit:s});
+      }
+      shuffleArray(cards);
+      return cards;
+    }
+
+    function drawCard(){
+      if(shoeIndex >= shoe.length) return null;
+      const c = shoe[shoeIndex++];
+      runningCount += hiLoValue(c.rank);
+      updateDisplays();
+      return c;
+    }
+
+    function decksRemaining(){ return (shoe.length - shoeIndex)/52; }
+    function computeTrueCount(){ const d = decksRemaining(); return d>0 ? runningCount/d : runningCount; }
+
+    function handValue(hand){
+      let total=0, aces=0;
+      for(const c of hand){
+        if(c.rank==='A'){ total+=11; aces++; }
+        else if(['K','Q','J'].includes(c.rank) || c.rank==='10') total+=10;
+        else total+=parseInt(c.rank,10);
+      }
+      while(total>21 && aces>0){ total-=10; aces--; }
+      return {total, soft: aces>0};
+    }
+
+    // Basic strategy (including pair suggestions for splits) - simplified
+    function basicStrategyForHand(hand, dealerUp){
+      // returns 'Pedir'|'Plantarse'|'Doblar'|'Dividir'
+      const hv = handValue(hand);
+      const total = hv.total;
+      const soft = (() => {
+        let total=0, aces=0;
+        for(const c of hand){
+          if(c.rank==='A'){ total+=11; aces++; }
+          else if(['K','Q','J','10'].includes(c.rank)) total+=10;
+          else total+=parseInt(c.rank,10);
+        }
+        while(total>21 && aces>0){ total-=10; aces--; }
+        return aces>0;
+      })();
+      const dealerVal = dealerUp.rank==='A' ? 11 : (['K','Q','J','10'].includes(dealerUp.rank) ? 10 : parseInt(dealerUp.rank,10));
+
+      // Pair: recommend split on common cases (basic)
+      if(hand.length===2 && hand[0].rank === hand[1].rank){
+        const r = hand[0].rank;
+        // general simplified pair strategy
+        if(r === 'A') return 'Dividir';
+        if(r === '8') return 'Dividir';
+        if(['2','3'].includes(r)){
+          if(dealerVal>=2 && dealerVal<=7) return 'Dividir';
+        }
+        if(r==='4'){
+          if(dealerVal===5 || dealerVal===6) return 'Dividir';
+        }
+        if(r==='5') return 'Doblar';
+        if(r==='6'){
+          if(dealerVal>=2 && dealerVal<=6) return 'Dividir';
+        }
+        if(r==='7'){
+          if(dealerVal>=2 && dealerVal<=7) return 'Dividir';
+        }
+        if(r==='9'){
+          if([7,10,11].includes(dealerVal)) return 'Plantarse';
+          return 'Dividir';
+        }
+        // else fallthrough
+      }
+
+      // Soft totals
+      if(soft){
+        if(total<=17) return 'Pedir';
+        if(total===18){
+          if([9,10,11].includes(dealerVal)) return 'Pedir';
+          return 'Plantarse';
+        }
+        return 'Plantarse';
+      }
+
+      // Hard totals
+      if(total>=17) return 'Plantarse';
+      if(total>=13 && total<=16){
+        if(dealerVal>=2 && dealerVal<=6) return 'Plantarse';
+        return 'Pedir';
+      }
+      if(total===12){
+        if(dealerVal>=4 && dealerVal<=6) return 'Plantarse';
+        return 'Pedir';
+      }
+      if(total<=11){
+        if(total===11) return 'Doblar';
+        if(total===10 && dealerVal<=9) return 'Doblar';
+        if(total===9 && dealerVal>=3 && dealerVal<=6) return 'Doblar';
+        return 'Pedir';
+      }
+      return 'Pedir';
+    }
+
+    // Deviation suggestions based on True Count (approx indices)
+    function deviationSuggestions(trueCount, hand, dealerUp){
+      const out=[];
+      const hv = handValue(hand);
+      const total = hv.total;
+      const dealerVal = dealerUp.rank==='A' ? 11 : (['K','Q','J','10'].includes(dealerUp.rank) ? 10 : parseInt(dealerUp.rank,10));
+
+      // Insurance
+      if(dealerUp.rank==='A') out.push({text:'Seguro: tomar si TC ≥ 3', recommend: trueCount>=3});
+
+      // 16 vs 10
+      if(total===16 && dealerVal===10) out.push({text:'16 vs 10: plantarse si TC ≥ 0', recommend: trueCount>=0});
+
+      // 15 vs 10
+      if(total===15 && dealerVal===10) out.push({text:'15 vs 10: plantarse si TC ≥ 4', recommend: trueCount>=4});
+
+      // 12 vs 3
+      if(total===12 && dealerVal===3) out.push({text:'12 vs 3: plantarse si TC ≥ 2', recommend: trueCount>=2});
+
+      // 12 vs 2
+      if(total===12 && dealerVal===2) out.push({text:'12 vs 2: plantarse si TC ≥ 3', recommend: trueCount>=3});
+
+      // Example split deviation: 10,10 (stand) rarely split, but some indices suggest splitting 10s never recommended; skip.
+      // Add 10 vs A doubling index? Keep set simple & educational.
+
+      return out;
+    }
+
+    // UI helpers
+    function renderCard(c){
+      const el = document.createElement('div');
+      el.className='card';
+      const rank = document.createElement('div'); rank.className='rank'; rank.textContent=c.rank;
+      const suit = document.createElement('div'); suit.textContent=c.suit;
+      el.appendChild(rank); el.appendChild(suit);
+      return el;
+    }
+
+    function renderAll(){
+      // dealer
+      dealerHandEl.innerHTML='';
+      for(let i=0;i<dealerHand.length;i++){
+        if(i===1 && roundActive) {
+          // hole card hidden while roundActive
+          const back = document.createElement('div'); back.className='card'; back.style.background='#0b5b8a'; back.textContent='?';
+          dealerHandEl.appendChild(back);
+        } else dealerHandEl.appendChild(renderCard(dealerHand[i]));
+      }
+      // player hands
+      playerHandsContainer.innerHTML='';
+      for(let i=0;i<playerHands.length;i++){
+        const panel = document.createElement('div'); panel.className='hand-panel';
+        if(i===activeHand) panel.classList.add('hand-active');
+        const hTitle = document.createElement('div'); hTitle.textContent = `Mano ${i+1} — Apuesta: ${bets[i]} u`;
+        const hv = handValue(playerHands[i]);
+        const valLine = document.createElement('div'); valLine.className='small'; valLine.textContent = `Valor: ${hv.total}${hv.soft ? ' (soft)' : ''}`;
+        const handDiv = document.createElement('div'); handDiv.className='hand';
+        for(const c of playerHands[i]) handDiv.appendChild(renderCard(c));
+        panel.appendChild(hTitle); panel.appendChild(handDiv); panel.appendChild(valLine);
+        panel.addEventListener('click', ()=>{ if(!roundActive) return; activeHand=i; updateUIBasedOnActive(); renderAll(); });
+        playerHandsContainer.appendChild(panel);
+      }
+      updateDisplays();
+    }
+
+    function updateDisplays(){
+      runningCountEl.textContent = runningCount;
+      const tc = +(computeTrueCount()).toFixed(2);
+      trueCountEl.textContent = tc;
+      decksLeftEl.textContent = decksRemaining().toFixed(2);
+      suggestedBetEl.textContent = calculateSuggestedBet(tc);
+      bankDisplay.textContent = bank.toFixed(2);
+      totalCardsEl.textContent = shoe.length;
+      usedCardsEl.textContent = shoeIndex;
+      activeHandIndexEl.textContent = (roundActive ? (activeHand+1) : '—');
+    }
+
+    function calculateSuggestedBet(trueCount){
+      const min = Math.max(1, Number(minBetInput.value||10));
+      const tcFloor = Math.floor(Math.max(trueCount,0));
+      let suggested = min * Math.max(1, tcFloor);
+      suggested = Math.min(suggested, bank);
+      return Math.max(min, Math.round(suggested));
+    }
+
+    // Round control functions
+    function resetShoe(){
+      numDecks = parseInt(selectDecks.value,10);
+      shoe = buildShoe(numDecks);
+      shoeIndex = 0;
+      runningCount = 0;
+      playerHands=[]; bets=[]; initialBlackjack=[]; dealerHand=[]; activeHand=0;
+      roundActive=false; splitAllowed=true;
+      statusEl.textContent='Shoe mezclada';
+      renderAll();
+      saveBank();
+    }
+
+    function startRound(){
+      const minBet = Math.max(1, Number(minBetInput.value||10));
+      let bet = Math.max(minBet, Number(betInput.value||minBet));
+      if(bet > bank){ alert('No tienes suficiente banca para esa apuesta'); return; }
+      // subtract initial bet
+      bank -= bet;
+      // init hands
+      playerHands = [[]];
+      bets = [bet];
+      initialBlackjack = [false];
+      dealerHand = [];
+      activeHand = 0;
+      // deal
+      playerHands[0].push(drawCard());
+      dealerHand.push(drawCard());
+      playerHands[0].push(drawCard());
+      dealerHand.push(drawCard());
+      // check blackjack
+      const phv = handValue(playerHands[0]);
+      if(phv.total===21) initialBlackjack[0]=true;
+      roundActive=true;
+      // enable actions
+      updateUIBasedOnActive();
+      renderAll();
+      statusEl.textContent='Mano activa';
+      saveBank();
+    }
+
+    function canSplitNow(){
+      if(!roundActive) return false;
+      if(!splitAllowed) return false;
+      if(playerHands.length>1) return false; // only allow single split
+      const h = playerHands[activeHand];
+      if(h.length!==2) return false;
+      if(h[0].rank !== h[1].rank) return false;
+      // check bank available for additional bet equal to current bet
+      return bank >= bets[activeHand];
+    }
+
+    function doSplit(){
+      if(!canSplitNow()) return alert('No puedes dividir ahora');
+      const h = playerHands[activeHand];
+      const bet = bets[activeHand];
+      // subtract additional bet
+      bank -= bet;
+      // create two hands
+      const cardA = h[0], cardB = h[1];
+      playerHands = [[cardA], [cardB]];
+      bets = [bet, bet];
+      initialBlackjack = [false, false];
+      // draw one card for each new hand
+      playerHands[0].push(drawCard());
+      playerHands[1].push(drawCard());
+      splitAllowed=false; // no resplits
+      activeHand = 0;
+      updateUIBasedOnActive();
+      renderAll();
+      saveBank();
+    }
+
+    function playerHit(){
+      if(!roundActive) return;
+      playerHands[activeHand].push(drawCard());
+      updateUIBasedOnActive();
+      renderAll();
+      const hv = handValue(playerHands[activeHand]);
+      if(hv.total>21) {
+        advanceHandOrFinish();
+      } else {
+        renderStrategyAndDeviations();
+      }
+      saveBank();
+    }
+
+    function playerDouble(){
+      if(!roundActive) return;
+      const bet = bets[activeHand];
+      if(bank < bet) return alert('No tienes suficiente banca para doblar esta mano');
+      bank -= bet;
+      bets[activeHand] *= 2;
+      playerHands[activeHand].push(drawCard());
+      advanceHandOrFinish(true);
+      saveBank();
+    }
+
+    function playerStand(){
+      if(!roundActive) return;
+      advanceHandOrFinish(true);
+      saveBank();
+    }
+
+    function advanceHandOrFinish(forceStand=false){
+      const hv = handValue(playerHands[activeHand]);
+      if(hv.total>21 || forceStand){
+        const start = activeHand+1;
+        let found = -1;
+        for(let i=start;i<playerHands.length;i++){
+          const hv2 = handValue(playerHands[i]);
+          if(hv2.total <=21) { found=i; break; }
+        }
+        if(found===-1){
+          dealerPlayAndResolve();
+        } else {
+          activeHand = found;
+          updateUIBasedOnActive();
+          renderAll();
+        }
+      } else {
+        updateUIBasedOnActive();
+        renderAll();
+      }
+    }
+
+    function dealerPlayAndResolve(){
+      renderAll();
+      while(true){
+        const hv = handValue(dealerHand);
+        if(hv.total < 
