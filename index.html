@@ -1,90 +1,34 @@
-@@
-   <script>
-   (function(){
-+    // DEBUG: confirm script execution
-+    alert('JS cargado');
-     // DOM
-     const selectDecks = document.getElementById('selectDecks');
-@@
--    function startRound(){
--      const minBet = Math.max(1, Number(minBetInput.value||10));
--      let bet = Math.max(minBet, Number(betInput.value||minBet));
--      if(bet > bank){ alert('No tienes suficiente banca para esa apuesta'); return; }
--      // subtract initial bet
--      bank -= bet;
--      // init hands
--      playerHands = [[]];
--      bets = [bet];
--      initialBlackjack = [false];
--      dealerHand = [];
--      activeHand = 0;
--      // deal
--      playerHands[0].push(drawCard());
--      dealerHand.push(drawCard());
--      playerHands[0].push(drawCard());
--      dealerHand.push(drawCard());
--      // check blackjack
--      const phv = handValue(playerHands[0]);
--      if(phv.total===21) initialBlackjack[0]=true;
--      roundActive=true;
--      // enable actions
--      updateUIBasedOnActive();
--      renderAll();
--      statusEl.textContent='Mano activa';
--      saveBank();
--    }
-+    function startRound(){
-+      try{
-+        const minBet = Math.max(1, Number(minBetInput.value||10));
-+        let bet = Math.max(minBet, Number(betInput.value||minBet));
-+        if(bet > bank){ alert('No tienes suficiente banca para esa apuesta'); return; }
-+        // subtract initial bet
-+        bank -= bet;
-+        // init hands
-+        playerHands = [[]];
-+        bets = [bet];
-+        initialBlackjack = [false];
-+        dealerHand = [];
-+        activeHand = 0;
-+        // deal
-+        playerHands[0].push(drawCard());
-+        dealerHand.push(drawCard());
-+        playerHands[0].push(drawCard());
-+        dealerHand.push(drawCard());
-+        // check blackjack
-+        const phv = handValue(playerHands[0]);
-+        if(phv.total===21) initialBlackjack[0]=true;
-+        roundActive=true;
-+        // enable actions
-+        updateUIBasedOnActive();
-+        renderAll();
-+        statusEl.textContent='Mano activa';
-+        saveBank();
-+      }catch(e){ alert('startRound error: '+(e && e.message ? e.message : e)); }
-+    }
-@@
--    btnDeal.addEventListener('click', ()=>{ startRound(); });
-+    btnDeal.addEventListener('click', ()=>{ alert('Repartir clic'); startRound(); });
-@@
--    // Init
--    function init(){
--      bank = Number(localStorage.getItem('bj_bank') || 1000);
--      resetShoe();
--      // register service worker if available
--      if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
--      updateDisplays();
--    }
-+    // Init
-+    function init(){
-+      bank = Number(localStorage.getItem('bj_bank') || 1000);
-+      resetShoe();
-+      // DEBUG: temporarily do not register service worker to avoid stale caching
-+      // if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-+      updateDisplays();
-+    }
-@@
--    init();
-+    init();
- 
-   })();
-   </script>
+    function startRound(){
+      try{
+        // Ensure shoe is initialized and has cards before dealing
+        if(!shoe || shoe.length===0 || typeof shoeIndex === 'undefined' || shoeIndex >= shoe.length){
+          resetShoe();
+        }
+        const minBet = Math.max(1, Number(minBetInput.value||10));
+        let bet = Math.max(minBet, Number(betInput.value||minBet));
+        if(bet > bank){ alert('No tienes suficiente banca para esa apuesta'); return; }
+        // subtract initial bet
+        bank -= bet;
+        // init hands
+        playerHands = [[]];
+        bets = [bet];
+        initialBlackjack = [false];
+        dealerHand = [];
+        activeHand = 0;
+        // deal - guard against drawCard returning undefined/null
+        const c1 = drawCard(); if(!c1){ resetShoe(); }
+        playerHands[0].push(drawCard());
+        dealerHand.push(drawCard());
+        playerHands[0].push(drawCard());
+        dealerHand.push(drawCard());
+        // check blackjack
+        const phv = handValue(playerHands[0]);
+        if(phv.total===21) initialBlackjack[0]=true;
+        roundActive=true;
+        // enable actions
+        updateUIBasedOnActive();
+        renderAll();
+        statusEl.textContent='Mano activa';
+        saveBank();
+      }catch(e){ alert('startRound error: '+(e && e.message ? e.message : e)); }
+    }
