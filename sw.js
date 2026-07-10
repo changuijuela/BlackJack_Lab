@@ -1,12 +1,20 @@
-const CACHE_NAME = 'bjlab-v1';
-const toCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
-self.addEventListener('install', evt => {
- evt.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(toCache)));
+// Temporary debug service worker: clear caches and unregister itself to avoid serving stale cached app
+self.addEventListener('install', event => {
+  event.waitUntil(self.skipWaiting());
 });
-self.addEventListener('fetch', evt => {
- evt.respondWith(caches.match(evt.request).then(r => r || fetch(evt.request)));
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+      // Unregister this service worker so the page will load from network
+      await self.registration.unregister();
+    } catch (e) {
+      // ignore
+    }
+  })());
+});
+self.addEventListener('fetch', event => {
+  // Always try network first; fall back to cache if offline
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
